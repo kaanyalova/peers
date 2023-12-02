@@ -40,7 +40,7 @@ impl TrackerRequest {
         Ok(Self {
             info_hash,
             peer_id,
-            port: 0,
+            port: 1337,
             uploaded: 0,
             downloaded: 0,
             compact: 0,
@@ -106,9 +106,10 @@ pub struct TrackerResponse {
 }
 
 #[derive(Debug)]
+// remove the pub fields later
 pub struct Peer {
-    ip: Ipv4Addr,
-    port: u16,
+    pub ip: Ipv4Addr,
+    pub port: u16,
 }
 
 impl TrackerResponse {
