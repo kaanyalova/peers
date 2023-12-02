@@ -24,6 +24,14 @@ fn main() {
         let peers: &Vec<Peer> = &torrent.tracker_response.get_peers().unwrap();
 
         for peer in peers {
+            // Networking code
+            // Move this to connection.rs
+            //
+            // first "thing" received should be the handshake with a fixed size
+            // terminate the connection if it isn't
+            //
+            // after that get the first byte of the stream the length, get the rest of the message as [u8; len]
+            // serialize into a message struct
             let addr = format!("{}:{}", peer.ip, peer.port);
             println!("started connection to {}", addr);
             let mut stream = TcpStream::connect(addr).unwrap();

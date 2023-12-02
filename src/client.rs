@@ -16,24 +16,21 @@ pub struct Client {
     pub torrents: HashMap<String, Torrent>,
     pub peer_id: [u8; 20],
     pub reqwest: ReqwestClient,
-
-    /// Max number of operations should be configurable the default for qBittorent is 100 per torrent and
-    /// 500 in total we will want to get the connections per torrent using
-    ///
-    ///
-    ///
-    /// if torrents.len() > 5 {
-    ///     connections = MAX_CONNECTIONS / torrents.len()
-    /// }
-    /// else {
-    ///     connections = MAX_PER_TORRENT
-    /// }
-    ///
-    ///
-    ///
-    ///
-    /// there is no todo type, it is bool for now, so i can write documentation
-    pub queue: bool,
+    // Max number of operations should be configurable the default for qBittorent is 100 per torrent and
+    // 500 in total we will want to get the connections per torrent using
+    //
+    //
+    //
+    // if torrents.len() > 5 {
+    //     connections = MAX_CONNECTIONS / torrents.len()
+    // }
+    // else {
+    //     connections = MAX_PER_TORRENT
+    // }
+    //
+    //
+    //
+    //
 }
 
 // remove the pubs later
