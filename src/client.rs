@@ -1,10 +1,11 @@
 use anyhow::{Ok, Result};
 use rand::{distributions::Alphanumeric, Rng};
-use reqwest::blocking::Client as ReqwestClient;
+use reqwest::Client as ReqwestClient;
 use std::{collections::HashMap, future::Future, process::Output};
 
 use crate::{
-    connection::{self, Handshake},
+    connection::{self},
+    handshake::Handshake,
     torrent_file::TorrentFile,
     tracker::{self, TrackerRequest, TrackerResponse},
 };
@@ -46,10 +47,14 @@ pub struct Torrent {
 /// This should try to connect all peers and do the initial handshake, removing peers from tracker_request.get_peers()
 /// adding them to networked peers
 impl Torrent {
-    fn new(torrent_file: TorrentFile, peer_id: [u8; 20], reqwest: &ReqwestClient) -> Result<Self> {
+    async fn new(
+        torrent_file: TorrentFile,
+        peer_id: [u8; 20],
+        reqwest: &ReqwestClient,
+    ) -> Result<Self> {
         let tracker_request = TrackerRequest::new(&torrent_file, peer_id)?;
-        let tracker_response = tracker_request.request(&torrent_file, reqwest)?;
-        let handshake = connection::Handshake::new_buf(peer_id, tracker_request.info_hash);
+        let tracker_response = tracker_request.request(&torrent_file, reqwest).await?;
+        let handshake = Handshake::new_buf(peer_id, tracker_request.info_hash);
         //let peers = todo!();
         //let networked_peers = todo()!;
 
@@ -86,8 +91,8 @@ impl Client {
         })
     }
 
-    pub fn add_torrent(&mut self, file: TorrentFile) -> Result<()> {
-        let torrent = Torrent::new(file, self.peer_id, &self.reqwest)?;
+    pub async fn add_torrent(&mut self, file: TorrentFile) -> Result<()> {
+        let torrent = Torrent::new(file, self.peer_id, &self.reqwest).await?;
         let name = torrent.torrent_file.info.name.clone();
 
         let torrent = self.torrents.insert(name, torrent);

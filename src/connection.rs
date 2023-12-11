@@ -1,34 +1,13 @@
-use std::net::TcpStream;
+use std::{io, net::TcpStream};
 
-use anyhow::{Ok, Result};
+use anyhow::Result;
 use sha1::digest::typenum::bit;
+use thiserror::Error;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::unix::pipe::Receiver;
 
+use crate::handshake::{deserialize_handshake, Handshake};
 use crate::tracker::Peer;
-
-pub struct Handshake {
-    pstrlen: u8,
-    pstr: String,
-    reserved: u8,
-    info_hash: [u8; 20],
-    peer_id: [u8; 20],
-}
-
-/// Might use serde for this, this looks dumb, i don't know
-///
-impl Handshake {
-    pub fn new_buf(peer_id: [u8; 20], info_hash: [u8; 20]) -> Vec<u8> {
-        let mut buffer: Vec<u8> = Vec::new();
-        buffer.push(19);
-        buffer.extend("BitTorrent protocol".as_bytes());
-        buffer.extend([0u8; 8]);
-        buffer.extend(info_hash);
-        buffer.extend(peer_id);
-        buffer
-    }
-    pub fn serialize() {
-        todo!()
-    }
-}
 
 // Messages
 
@@ -51,8 +30,6 @@ bytes -> Message
 
 */
 
-fn serialize_handshake() {}
-
 /// bytes are <message ID><Payload>
 /// without the length prefix, length is only used for networking to know   
 fn read_message(bytes: &[u8]) -> impl Message {
@@ -64,17 +41,6 @@ fn read_message(bytes: &[u8]) -> impl Message {
         // n => HaveMessage::parse(&bytes),
         _ => todo!(),
     }
-}
-
-fn _alt_read_message(id: u8, bytes: Vec<u8>) -> _alt_Msg {
-    match id {
-        0 => _alt_Msg::KeepAlive(KeepAliveMessage),
-        _ => todo!(),
-    }
-}
-
-enum _alt_Msg {
-    KeepAlive(KeepAliveMessage),
 }
 
 trait Message {}
@@ -165,7 +131,8 @@ impl PieceMessage {
 struct HandShakeResponse {}
 
 /// Once the client tries to connect to peers they should be removed from the Peers vec, and added to here
-struct NetworkedPeer {
+#[derive(Clone, Debug)]
+pub struct NetworkedPeer {
     peer: Peer,
     /// changed by Have messages and bitfields , bitfields might be set as "don't have" for some clients but later
     /// sent as Have messages
@@ -175,21 +142,35 @@ struct NetworkedPeer {
 }
 
 impl NetworkedPeer {
-    fn new(peer: Peer) -> Result<Self> {
-        // Do the initial handshake here
+    pub async fn new(peer: Peer, handshake_bytes: &Vec<u8>) -> Result<Self> {
         // This is blocking code for now but will be converted to async
 
         // this is dumb , change it later
         let addr = format!("{}:{}", peer.ip, peer.port);
-        TcpStream::connect(addr);
+
+        let mut peer_connection = tokio::net::TcpStream::connect(addr).await?;
+        peer_connection.write_all(&handshake_bytes).await?;
+
+        // try to read the handshake , it is always 68 bytes long
+        let mut buffer = [0u8; 68];
+
+        peer_connection.read_exact(&mut buffer).await?;
+
+        let handshake = deserialize_handshake(buffer)?;
 
         let networked_peer = NetworkedPeer {
-            peer,
-            have_pieces: todo!(),
-            ignore: todo!(),
-            handshake_response: todo!(),
+            peer,                // TODO remove the clone
+            have_pieces: vec![], // TODO,
+            ignore: false,       // TODO,
+            handshake_response: handshake,
         };
 
-        Ok(networked_peer);
+        Ok(networked_peer)
     }
+}
+
+struct NetworkCommand {}
+enum Command {
+    Send { bytes: Vec<u8> },
+    Receive { bytes: Vec<u8> },
 }

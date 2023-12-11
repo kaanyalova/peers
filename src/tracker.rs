@@ -7,7 +7,7 @@ use std::{
 use anyhow::{Error, Result};
 use byteorder::{BigEndian, ReadBytesExt};
 use rand::{distributions::Alphanumeric, Rng};
-use reqwest::blocking::Client;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use sha1::{Digest, Sha1};
@@ -48,7 +48,11 @@ impl TrackerRequest {
         })
     }
 
-    pub fn request(&self, torrent: &TorrentFile, reqwest: &Client) -> Result<TrackerResponse> {
+    pub async fn request(
+        &self,
+        torrent: &TorrentFile,
+        reqwest: &Client,
+    ) -> Result<TrackerResponse> {
         // i cannot use reqwest::get().query()... because serde_urlencoding doesn't support serializing bytes
         // https://github.com/nox/serde_urlencoded/issues/104
 
@@ -63,7 +67,7 @@ impl TrackerRequest {
             &self.left,
         );
 
-        let request = reqwest.get(url).send()?.bytes()?;
+        let request = reqwest.get(url).send().await?.bytes().await?;
         let response: TrackerResponse = serde_bencode::from_bytes(&request)?;
 
         Ok(response)
@@ -105,7 +109,7 @@ pub struct TrackerResponse {
     peers: ByteBuf,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 // remove the pub fields later
 pub struct Peer {
     pub ip: Ipv4Addr,
