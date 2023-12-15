@@ -6,7 +6,7 @@ use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::unix::pipe::Receiver;
 
-use crate::handshake::{deserialize_handshake, Handshake};
+use crate::handshake::Handshake;
 use crate::tracker::Peer;
 
 // Messages
@@ -156,7 +156,7 @@ impl NetworkedPeer {
 
         peer_connection.read_exact(&mut buffer).await?;
 
-        let handshake = deserialize_handshake(buffer)?;
+        let handshake = Handshake::parse_handshake(&buffer)?;
 
         let networked_peer = NetworkedPeer {
             peer,                // TODO remove the clone
