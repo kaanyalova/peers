@@ -8,6 +8,7 @@ use futures::executor::block_on;
 use tracker::{Peer, TrackerRequest};
 mod client;
 mod connection;
+mod consts;
 mod handshake;
 mod torrent_file;
 mod tracker;
@@ -22,7 +23,7 @@ async fn main() {
 
     client.add_torrent(file).await.unwrap();
 
-    for (key, torrent) in client.torrents.iter() {
+    for (_key, torrent) in client.torrents.iter() {
         let handshake = &torrent.handshake;
         let peers: &Vec<Peer> = &torrent.tracker_response.get_peers().unwrap();
 
