@@ -4,6 +4,7 @@ use ntest::timeout;
 use peers_core::{self, client::Client, connection, torrent_file::TorrentFile};
 use tokio::time::timeout;
 
+#[cfg(feature = "p2p_tests")]
 #[tokio::test]
 #[timeout(30000)]
 async fn test_receive_handshake() {

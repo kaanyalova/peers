@@ -14,8 +14,6 @@ peers_core = {path = "./crates/peers_core"}
 tokio = { version = "1.34.0", features = ["full"] }
 ntest = "0.9.0"
 
-
-
 [workspace]
 members = ["./crates/*"]
 default-members = ["./crates/peers_ui"]
@@ -23,3 +21,9 @@ default-members = ["./crates/peers_ui"]
 [workspace.dependencies]
 peers_core = {path = "./crates/peers_core"}
 
+
+[features]
+# i don't want to run theese tests on github's ci
+# use cargo test --no-default features to skip them
+p2p_tests = []
+default = ["p2p_tests"] 
