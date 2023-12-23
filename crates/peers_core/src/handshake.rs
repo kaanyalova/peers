@@ -1,8 +1,4 @@
 use anyhow::{Ok, Result};
-use serde::{
-    de::{DeserializeOwned, Visitor},
-    Deserialize, Serialize,
-};
 use thiserror::Error;
 
 use crate::consts::{self, BITTORRENT_PROTOCOL, PSTRLEN};

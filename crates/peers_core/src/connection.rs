@@ -138,7 +138,7 @@ pub struct NetworkedPeer {
     /// sent as Have messages
     have_pieces: Vec<bool>,
     ignore: bool,
-    handshake_response: Handshake,
+    pub handshake_response: Handshake,
 }
 
 impl NetworkedPeer {
