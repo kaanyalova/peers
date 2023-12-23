@@ -8,7 +8,7 @@ use tokio::time::timeout;
 #[timeout(30000)]
 async fn test_receive_handshake() {
     let mut client = Client::new().unwrap();
-    let file = TorrentFile::from_file("stuff/debian-12.2.0-amd64-netinst.iso.torrent").unwrap();
+    let file = TorrentFile::from_file("torrents/debian-12.2.0-amd64-netinst.iso.torrent").unwrap();
 
     client.add_torrent(file).await.unwrap();
 
@@ -17,14 +17,6 @@ async fn test_receive_handshake() {
         let peers = torrent.tracker_response.get_peers().unwrap();
 
         for peer in peers {
-            // Networking code
-            // Move this to connection.rs
-            //
-            // first "thing" received should be the handshake with a fixed size
-            // terminate the connection if it isn't
-            //
-            // after that get the first byte of the stream the length, get the rest of the message as [u8; len]
-            // serialize into a message struct
             dbg!("sent");
             let addr = format!("{}:{}", peer.ip, peer.port);
 
