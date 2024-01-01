@@ -24,7 +24,6 @@ fn main() {
     let mut c = Cli::command();
     match &cli.command {
         Some(Commands::Add(t)) => add_torrent(&t.path),
-        // if
         None => no_subcommands(&mut c),
     };
 }

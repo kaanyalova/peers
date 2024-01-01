@@ -1,10 +1,12 @@
-use std::{io, net::TcpStream};
-
 use anyhow::Result;
+use futures::channel::mpsc::Sender;
+use futures::channel::oneshot;
 use sha1::digest::typenum::bit;
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::unix::pipe::Receiver;
+
+use tokio::net::TcpStream;
+use tokio::sync::mpsc::{self, Receiver};
 
 use crate::handshake::Handshake;
 use crate::tracker::Peer;
@@ -142,9 +144,7 @@ pub struct NetworkedPeer {
 }
 
 impl NetworkedPeer {
-    pub async fn new(peer: Peer, handshake_bytes: &Vec<u8>) -> Result<Self> {
-        // This is blocking code for now but will be converted to async
-
+    pub async fn new(peer: Peer, handshake_bytes: &Vec<u8>) -> Result<()> {
         // this is dumb , change it later
         let addr = format!("{}:{}", peer.ip, peer.port);
 
@@ -165,12 +165,13 @@ impl NetworkedPeer {
             handshake_response: handshake,
         };
 
-        Ok(networked_peer)
+        Ok(())
+        //Ok(networked_peer)
     }
 }
 
 struct NetworkCommand {}
-enum Command {
+pub enum Command {
     Send { bytes: Vec<u8> },
     Receive { bytes: Vec<u8> },
 }

@@ -1,13 +1,18 @@
 use std::time::Duration;
 
 use ntest::timeout;
+use peers_core::connection::Command;
 use peers_core::{self, client::Client, connection, torrent_file::TorrentFile};
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::Sender;
 use tokio::time::timeout;
 
-#[cfg(feature = "p2p_tests")]
+#[cfg(not(feature = "no_p2p_tests"))]
 #[tokio::test]
 #[timeout(30000)]
 async fn test_receive_handshake() {
+    use tokio::sync::mpsc::Receiver;
+
     let mut client = Client::new().unwrap();
     let file = TorrentFile::from_file("torrents/debian-12.2.0-amd64-netinst.iso.torrent").unwrap();
 
@@ -20,8 +25,9 @@ async fn test_receive_handshake() {
         for peer in peers {
             dbg!("sent");
             let addr = format!("{}:{}", peer.ip, peer.port);
+            let (sx, rx): (Sender<Command>, Receiver<Command>) = mpsc::channel(10);
 
-            let future = connection::NetworkedPeer::new(peer, handshake);
+            let future = connection::NetworkedPeer::new(peer, handshake, rx);
 
             let timeout = timeout(Duration::from_secs(5), future).await;
 
