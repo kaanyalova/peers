@@ -16,7 +16,6 @@ ntest = "0.9.0"
 
 [workspace]
 members = ["peers_cli","peers_core", "peers_ui"]
-default-members = ["peers_ui"]
 
 [workspace.dependencies]
 peers_core = {path = "peers_core"}

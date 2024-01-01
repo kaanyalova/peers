@@ -24,10 +24,8 @@ async fn test_receive_handshake() {
 
         for peer in peers {
             dbg!("sent");
-            let addr = format!("{}:{}", peer.ip, peer.port);
-            let (sx, rx): (Sender<Command>, Receiver<Command>) = mpsc::channel(10);
 
-            let future = connection::NetworkedPeer::new(peer, handshake, rx);
+            let future = connection::NetworkedPeer::new(peer, handshake);
 
             let timeout = timeout(Duration::from_secs(5), future).await;
 
