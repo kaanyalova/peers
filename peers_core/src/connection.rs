@@ -232,7 +232,7 @@ impl NetworkedPeer {
 
             let mut is_choked = true;
 
-            loop {
+            'peer_loop: loop {
                 // read the length, it is 4 bytes
                 let len = peer_connection.read_u32().await.unwrap();
 
