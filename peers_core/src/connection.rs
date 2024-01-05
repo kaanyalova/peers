@@ -1,4 +1,6 @@
-use anyhow::Result;
+use std::vec;
+
+use anyhow::{Error, Ok, Result};
 use futures::channel::mpsc::Sender;
 use futures::channel::oneshot;
 use sha1::digest::typenum::bit;
@@ -8,7 +10,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::{self, Receiver};
 
-use crate::handshake::Handshake;
+use crate::handshake::{self, Handshake};
 use crate::tracker::Peer;
 
 // Messages
@@ -32,49 +34,45 @@ bytes -> Message
 
 */
 
-/// bytes are <message ID><Payload>
-/// without the length prefix, length is only used for networking to know   
-fn read_message(bytes: &[u8]) -> impl Message {
-    let id = bytes[0];
-    match id {
-        0 => KeepAliveMessage,
-        // parse the bytes in the impl's of Messages not here
-        // like this
-        // n => HaveMessage::parse(&bytes),
-        _ => todo!(),
-    }
+enum Message {
+    KeepAliveMessage,
+    ChokeMessage,
+    UnchokeMessage,
+    InterestedMessage,
+    NotInterestedMessage,
+    HaveMessage(HaveMessageData),
+    BitFieldMessage,
+    PieceMessage,
+    CancelMessage,
+    PortMessage,
 }
 
-trait Message {}
-
 pub struct KeepAliveMessage;
-impl Message for KeepAliveMessage {}
 pub struct ChokeMessage;
-impl Message for ChokeMessage {}
 pub struct UnchokeMessage;
-impl Message for UnchokeMessage {}
 pub struct InterestedMessage;
-impl Message for InterestedMessage {}
 pub struct NotInterestedMessage;
-impl Message for NotInterestedMessage {}
-pub struct HaveMessage;
-impl Message for HaveMessage {}
+pub struct HaveMessageData {
+    have: Option<u32>,
+}
+
 pub struct BitFieldMessage;
-impl Message for BitFieldMessage {}
 pub struct RequestMessage;
-impl Message for RequestMessage {}
 pub struct PieceMessage;
-impl Message for PieceMessage {}
 pub struct CancelMessage;
-impl Message for CancelMessage {}
 pub struct PortMessage;
-impl Message for PortMessage {}
 
 pub fn new_base_message(length_prefix: u32, id: u8) -> Vec<u8> {
     let mut buffer = vec![];
     buffer.extend(length_prefix.to_be_bytes());
     buffer.push(id);
     buffer
+}
+
+impl KeepAliveMessage {
+    fn new_buffer() -> Vec<u8> {
+        vec![0, 0, 0, 0]
+    }
 }
 
 impl ChokeMessage {
@@ -101,11 +99,22 @@ impl NotInterestedMessage {
     }
 }
 
-impl HaveMessage {
+impl HaveMessageData {
     pub fn new_buffer(index: u64) -> Vec<u8> {
         let mut buffer = new_base_message(1, 5);
         buffer.extend(index.to_be_bytes());
         buffer
+    }
+
+    pub fn new(have: Vec<u8>) -> Self {
+        let have_parsed = u32::from_be_bytes(have.try_into().unwrap()); // this is temporary remove the unwrap
+        Self {
+            have: Some(have_parsed),
+        }
+    }
+
+    pub fn empty() -> Self {
+        Self { have: None }
     }
 }
 
@@ -130,6 +139,54 @@ impl PieceMessage {
     }
 }
 
+struct MessageToParse {
+    bytes_to_parse: Option<u32>,
+    message: Message,
+}
+
+impl MessageToParse {
+    fn new(len: u32, message: Message) -> MessageToParse {
+        // if we have more than 2 bytes we need to parse the rest
+        let bytes_to_parse = {
+            if len <= 2 {
+                None
+            } else {
+                Some(len - 2)
+            }
+        };
+        MessageToParse {
+            bytes_to_parse,
+            message,
+        }
+    }
+}
+
+fn read_message_first(len: u32, id: Option<u8>) -> Result<MessageToParse> {
+    match (len, id) {
+        (0, None) => Ok(MessageToParse::new(len, Message::KeepAliveMessage)),
+        (1, Some(0)) => Ok(MessageToParse::new(len, Message::ChokeMessage)),
+        (1, Some(1)) => Ok(MessageToParse::new(len, Message::UnchokeMessage)),
+        (1, Some(2)) => Ok(MessageToParse::new(len, Message::InterestedMessage)),
+        (1, Some(3)) => Ok(MessageToParse::new(len, Message::NotInterestedMessage)),
+        (1, Some(4)) => Ok(MessageToParse::new(
+            len,
+            Message::HaveMessage(HaveMessageData::empty()),
+        )),
+
+        _ => Err(Error::msg(
+            "this message isn't implemented or doesn't exist",
+        )),
+    }
+}
+
+/// only for messages with data
+fn read_message_final(bytes: Vec<u8>, message: Message) -> Message {
+    match message {
+        Message::HaveMessage(_) => Message::HaveMessage(HaveMessageData::new(bytes)),
+        _ => todo!(),
+    }
+}
+
 struct HandShakeResponse {}
 
 /// Once the client tries to connect to peers they should be removed from the Peers vec, and added to here
@@ -144,29 +201,73 @@ pub struct NetworkedPeer {
 }
 
 impl NetworkedPeer {
-    pub async fn new(peer: Peer, handshake_bytes: &Vec<u8>) -> Result<()> {
-        // this is dumb , change it later
-        let addr = format!("{}:{}", peer.ip, peer.port);
+    pub async fn new(peer: Peer, handshake_bytes: &Vec<u8>) -> Result<NetworkedPeer> {
+        let (handshake_tx, handshake_rx) = oneshot::channel();
+        //let (send_cmd_tx, send_cmd_rx) = mpsc::channel(10); // is 10 a good value??
+        //let (recv_cmd_tx, recv_cmd_rx) = mpsc::channel(10); // is 10 a good value??
 
-        let mut peer_connection = tokio::net::TcpStream::connect(addr).await?;
-        peer_connection.write_all(&handshake_bytes).await?;
+        let handshake_bytes_new = handshake_bytes.clone();
+        tokio::spawn(async move {
+            // this is dumb , change it later
+            let addr = format!("{}:{}", peer.ip, peer.port);
 
-        // try to read the handshake , it is always 68 bytes long
-        let mut buffer = [0u8; 68];
+            let mut peer_connection = tokio::net::TcpStream::connect(addr).await.unwrap();
+            peer_connection
+                .write_all(&handshake_bytes_new)
+                .await
+                .unwrap();
 
-        peer_connection.read_exact(&mut buffer).await?;
+            // try to read the handshake , it is always 68 bytes long
+            let mut buffer = [0u8; 68];
 
-        let handshake = Handshake::parse_handshake(&buffer)?;
+            peer_connection.read_exact(&mut buffer).await.unwrap();
+
+            let handshake = Handshake::parse_handshake(&buffer);
+
+            dbg!(&handshake);
+
+            handshake_tx.send(handshake).unwrap();
+
+            let mut len_buffer = [0u8; 4];
+
+            let mut is_choked = true;
+
+            loop {
+                // read the length, it is 4 bytes
+                let len = peer_connection.read_u32().await.unwrap();
+
+                // read the message id
+                let message_id = peer_connection.read_u8().await.ok();
+
+                let read_first = read_message_first(len, message_id).unwrap();
+
+                if let Some(bytes_to_parse) = read_first.bytes_to_parse {
+                    let mut rest_of_the_message_buffer = vec![0u8; bytes_to_parse as usize];
+                    peer_connection
+                        .read_exact(&mut rest_of_the_message_buffer)
+                        .await
+                        .unwrap();
+
+                    let msg_final =
+                        read_message_final(rest_of_the_message_buffer, read_first.message);
+
+                    // some_channel.send(msg_final)
+                } else {
+                    // TODO
+                    // just send the message, it doesn't have any data
+                    // some_channel.send(read_first.message)
+                }
+            }
+        });
 
         let networked_peer = NetworkedPeer {
-            peer,                // TODO remove the clone
+            peer,
             have_pieces: vec![], // TODO,
             ignore: false,       // TODO,
-            handshake_response: handshake,
+            handshake_response: handshake_rx.await??,
         };
 
-        Ok(())
-        //Ok(networked_peer)
+        Ok(networked_peer)
     }
 }
 
